@@ -1,5 +1,5 @@
 #!/bin/bash
-# бета_забор_i.sh — v1.0 (задача 616): первичная установка «сервер сам забирает
+# бета_забор_i.sh — v1.1 (задача 616; v1.1 — чистка ключа и проверка доступа): первичная установка «сервер сам забирает
 # выпуск с GitHub». Запускается на сервере один раз руками в консоли Selectel:
 #   wget -O i URL_ЭТОГО_ФАЙЛА ; bash i
 # Спросит репозиторий и токен (только чтение; пусто — репозиторий открытый),
@@ -9,6 +9,16 @@ set -euo pipefail
 [ "$(id -u)" = 0 ] || { echo "нужен root"; exit 1; }
 read -r -p "repo owner/name: " REPO
 read -r -s -p "token (empty if public): " TOK; echo
+# v1.1: konsol Selectel pri vstavke dobavlyaet musor (escape, probely) - chistim
+TOK=$(printf '%s' "$TOK" | tr -cd 'A-Za-z0-9_')
+REPO=$(printf '%s' "$REPO" | tr -cd 'A-Za-z0-9_./-')
+if [ -n "$TOK" ]; then
+  C=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOK" https://api.github.com/user)
+  [ "$C" = 200 ] || { echo "TOKEN REJECTED ($C): make a new token, paste again"; exit 1; }
+  C=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOK" "https://api.github.com/repos/$REPO")
+  [ "$C" = 200 ] || { echo "TOKEN OK, NO ACCESS TO REPO ($C): check repo name / Contents read-only"; exit 1; }
+  echo "token OK, repo OK (${#TOK} chars)"
+fi
 read -r -p "ref [beta-release]: " REF
 REF=${REF:-beta-release}
 install -d -m 700 /etc/tulza-beta /var/lib/tulza-beta-pull
